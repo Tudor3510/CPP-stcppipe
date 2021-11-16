@@ -65,7 +65,7 @@
     #define INTERLOCK_VAR(X)    static int X = 0; \
                                 static pthread_mutex_t  *X##_m = NULL;
     #define INTERLOCK_INIT(X)   if(!X##_m) { \
-                                    X##_m = calloc(1, sizeof(pthread_mutex_t)); \
+                                    X##_m = (pthread_mutex_t *) calloc(1, sizeof(pthread_mutex_t)); \
                                     if(!X##_m) std_err(); \
                                     pthread_mutex_init(X##_m, NULL); \
                                 }
@@ -125,7 +125,7 @@ thread_id quick_threadx(void *func, void *data) {
     pthread_attr_t  attr;
     pthread_attr_init(&attr);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
-    if(pthread_create(&tid, &attr, func, data)) return(0);
+    if(pthread_create(&tid, &attr, (void *(*)(void *))func, data)) return(0);
 #endif
     return(tid);
 }
@@ -143,14 +143,14 @@ typedef uint32_t    u32;
                         SSL_CTX_set_options(X, SSL_OP_ALL);
 
 #define ACPT_CHK(a,b,c) psz = sizeof(struct sockaddr_in); \
-                        a = accept(b, (struct sockaddr *)&c, &psz); \
+                        a = accept(b, (struct sockaddr *)&c, (socklen_t *) &psz); \
                         if(a < 0) std_err(); \
                         if(check_ip(&c) < 0) { \
                             close(a); \
                             continue; \
                         }
 #define FREE_ACPT(a,b)  psz = sizeof(struct sockaddr_in); \
-                        sd_tmp = accept(a, (struct sockaddr *)&b, &psz); \
+                        sd_tmp = accept(a, (struct sockaddr *)&b, (socklen_t *) &psz); \
                         if(sd_tmp < 0) std_err(); \
                         close(sd_tmp);
 #define GETHOST(a,b,c)  p = strchr(a, ':'); \
@@ -173,8 +173,8 @@ in_addr_t   *iplist         = NULL,
             *rhost          = NULL,
             *lifaces        = NULL,
             Lhost           = INADDR_ANY;
-int         quiet           = 0,
-            xor             = 0,
+int         quiet           = 0;
+int         xorVariable             = 0,
             dossl           = 0,
             dump_stdout     = 0,
             //cur_connections = 0,
@@ -254,7 +254,7 @@ static const char SSL_CERT_X509[] =   // x509 in input.crt inform PEM out output
 "\x15\x69\xce\x4a\x73\x3b\xee\x12\x4d\x1c\x63\x11\x9b\xdf\x4d\xa1"
 "\x38\x0d\xb6\x1d\xfb\xd6\xb8\x5b\xc2\x10\xd9";
 
-static const char SSL_CERT_RSA[] =    // rsa �in input.key �inform PEM �out output.key �outform DER
+static const char SSL_CERT_RSA[] =    // rsa in input.key inform PEM out output.key outform DER
 "\x30\x82\x02\x5b\x02\x01\x00\x02\x81\x81\x00\xc5\xe3\x3f\x2d\x8f"
 "\x98\xc2\x2a\xef\x71\xea\x40\x21\x54\x3f\x08\x62\x9c\x7b\x39\x22"
 "\xfd\xda\x80\x1f\x21\x3e\x8d\x68\xcf\x8e\x6b\x70\x98\x95\x2c\x1e"
@@ -448,7 +448,7 @@ int main(int argc, char *argv[]) {
             case 'a': iplist        = create_ip_array(argv[++i]);   break;
             case 'q': quiet         = 1;                            break;
             case 'r': i++; GETHOST(argv[i], rhost, rport)           break;
-            case 'x': xor           = atoi(argv[++i]);              break;
+            case 'x': xorVariable           = atoi(argv[++i]);              break;
             case 'd': dump          = argv[++i];                    break;
             case 'D': dump_stdout   = 1;                            break;
             case 's': subst1 = argv[++i]; subst2 = argv[++i];       break;
@@ -515,11 +515,11 @@ int main(int argc, char *argv[]) {
         if(chdir(dump) < 0) std_err();
     }
 
-    if(xor) {
+    if(xorVariable) {
         fprintf(stderr, "- XORing (0x%02x) of %s%s\n",
             XORBYTE,
-            (xor & 1) ? "local_port "  : "",
-            (xor & 2) ? "remote_port " : "");
+            (xorVariable & 1) ? "local_port "  : "",
+            (xorVariable & 2) ? "remote_port " : "");
     }
 
     if(lhost) fprintf(stderr, "- local IP       %s\n", ip2str(lhost));
@@ -620,7 +620,7 @@ int main(int argc, char *argv[]) {
                 continue;
             }
 
-            if(!quick_threadx(double_client, (void *)&t_sock)) {
+            if(!quick_threadx( (void*) double_client, (void*) &t_sock)) {
                 close(t_sock.local_sock);
                 close(t_sock.dest_sock);
             }
@@ -646,7 +646,7 @@ int main(int argc, char *argv[]) {
         thread_args->seed = INTERLOCK_GET(g_seed);
         INTERLOCK_INC(g_seed);
 
-        if(!quick_threadx(do_multi ? multi_connect : client, (void *)thread_args)) {
+        if(!quick_threadx(do_multi ? (void*) multi_connect : (void*) client, (void *)thread_args)) {
             close(sdla);
             if(max_connections > 0) {
                 INTERLOCK_DEC(cur_connections);
@@ -925,12 +925,12 @@ void handle_connections(int sock, int sd_one, int *sd_array, struct sockaddr_in 
             len = myrecv(ssl_sock, sock, buff, BUFFSZ);
             if(len <= 0) goto quit;
 
-            if(xor & 1) xor_data(buff, len);
+            if(xorVariable & 1) xor_data(buff, len);
             if(dump_fd) acp_dump(dump_fd, SOCK_STREAM, IPPROTO_TCP, sip, htons(sport), dip, htons(dport), buff, len, &seq1, &ack1, &seq2, &ack2, seed);
             if(dump_stdout) fwrite(buff, 1, len, stdout);
             if(subst1) subst(buff, len);
 
-            if(xor & 2) xor_data(buff, len);
+            if(xorVariable & 2) xor_data(buff, len);
             for(i = 0; i < socks; i++) {
                 if(multi_skip && multi_skip[i]) continue;
                 if(mysend(ssl_sd ? ssl_sd[i] : NULL, sd[i], buff, len) <= 0) MULTI_SKIP_QUIT
@@ -943,12 +943,12 @@ void handle_connections(int sock, int sd_one, int *sd_array, struct sockaddr_in 
             len = myrecv(ssl_sd ? ssl_sd[i] : NULL, sd[i], buff, BUFFSZ);
             if(len <= 0) MULTI_SKIP_QUIT
 
-            if(xor & 2) xor_data(buff, len);
+            if(xorVariable & 2) xor_data(buff, len);
             if(dump_fd) acp_dump(dump_fd, SOCK_STREAM, IPPROTO_TCP, dip, htons(dport), sip, htons(sport), buff, len, &seq2, &ack2, &seq1, &ack1, seed);
             if(dump_stdout) fwrite(buff, 1, len, stdout);
             if(subst1) subst(buff, len);
 
-            if(xor & 1) xor_data(buff, len);
+            if(xorVariable & 1) xor_data(buff, len);
             if(mysend(ssl_sock, sock, buff, len) <= 0) goto quit;
         }
     }
@@ -1292,7 +1292,7 @@ in_addr_t get_sock_ip_port(int sd, u16 *port) {
     int         psz;
 
     psz = sizeof(struct sockaddr_in);
-    if(getsockname(sd, (struct sockaddr *)&peer, &psz)
+    if(getsockname(sd, (struct sockaddr *)&peer, (socklen_t *) &psz)
       < 0) std_err();
 
     if(port) *port = ntohs(peer.sin_port);
@@ -1306,7 +1306,7 @@ in_addr_t get_peer_ip_port(int sd, u16 *port) {
     int         psz;
 
     psz = sizeof(struct sockaddr_in);
-    if(getpeername(sd, (struct sockaddr *)&peer, &psz) < 0) {
+    if(getpeername(sd, (struct sockaddr *)&peer, (socklen_t *) &psz) < 0) {
         peer.sin_addr.s_addr = 0;                   // avoids possible problems
         peer.sin_port        = 0;
     }
