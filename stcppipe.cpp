@@ -29,7 +29,7 @@
     #include <winsock2.h>
     #include <ws2tcpip.h>
     #include <direct.h>
-    #include "winerr.h"
+    #include "winerr.hpp"
 
     #define close           closesocket
     #define sleep           Sleep
@@ -95,7 +95,7 @@
     #define INTERLOCK_START(X)  while(X) { sleep(0); } X = 1;
     */
 
-#include "acpdump2.h"
+#include "acpdump2.hpp"
 
 //#define ENABLE_SSL          // comment to disable ssl
 #ifdef DISABLE_SSL          // or use -DDISABLE_SSL
@@ -120,7 +120,7 @@
 thread_id quick_threadx(void *func, void *data) {
     thread_id       tid;
 #ifdef _WIN32
-    if(!CreateThread(NULL, 0, func, data, 0, &tid)) return(0);
+    if(!CreateThread(NULL, 0,(LPTHREAD_START_ROUTINE) func, data, 0, &tid)) return(0);
 #else
     pthread_attr_t  attr;
     pthread_attr_init(&attr);
@@ -130,7 +130,7 @@ thread_id quick_threadx(void *func, void *data) {
     return(tid);
 }
 
-typedef uint8_t     u8;
+//typedef uint8_t     char;
 typedef uint16_t    u16;
 typedef uint32_t    u32;
 
@@ -179,7 +179,7 @@ int         quiet           = 0,
             dump_stdout     = 0,
             //cur_connections = 0,
             max_connections = 0;
-u8          *dump           = NULL,
+char          *dump           = NULL,
             *subst1         = NULL,
             *subst2         = NULL,
             *ssl_cert_file  = NULL,
@@ -203,7 +203,7 @@ typedef struct {
 
 
 
-static const u8 SSL_CERT_X509[] =   // x509 in input.crt inform PEM out output.crt outform DER
+static const char SSL_CERT_X509[] =   // x509 in input.crt inform PEM out output.crt outform DER
 "\x30\x82\x03\x07\x30\x82\x02\x70\xa0\x03\x02\x01\x02\x02\x09\x00"
 "\x85\x3a\x6e\x0a\xa4\x3c\x6b\xec\x30\x0d\x06\x09\x2a\x86\x48\x86"
 "\xf7\x0d\x01\x01\x05\x05\x00\x30\x61\x31\x0b\x30\x09\x06\x03\x55"
@@ -254,7 +254,7 @@ static const u8 SSL_CERT_X509[] =   // x509 in input.crt inform PEM out output.c
 "\x15\x69\xce\x4a\x73\x3b\xee\x12\x4d\x1c\x63\x11\x9b\xdf\x4d\xa1"
 "\x38\x0d\xb6\x1d\xfb\xd6\xb8\x5b\xc2\x10\xd9";
 
-static const u8 SSL_CERT_RSA[] =    // rsa �in input.key �inform PEM �out output.key �outform DER
+static const char SSL_CERT_RSA[] =    // rsa �in input.key �inform PEM �out output.key �outform DER
 "\x30\x82\x02\x5b\x02\x01\x00\x02\x81\x81\x00\xc5\xe3\x3f\x2d\x8f"
 "\x98\xc2\x2a\xef\x71\xea\x40\x21\x54\x3f\x08\x62\x9c\x7b\x39\x22"
 "\xfd\xda\x80\x1f\x21\x3e\x8d\x68\xcf\x8e\x6b\x70\x98\x95\x2c\x1e"
@@ -302,13 +302,13 @@ void handle_connections(int sock, int sd_one, int *sd_array, struct sockaddr_in 
 quick_thread(double_client, thread_sock *t_sock);
 quick_thread(client, thread_args_t *args);
 quick_thread(multi_connect, thread_args_t *args);
-void xor_data(u8 *data, int size);
+void xor_data(char *data, int size);
 char *stristr(const char *String, const char *Pattern);
 int array_connect(int sd, in_addr_t *ip, struct sockaddr_in *ipport, struct sockaddr_in *peer, int idx);
-void show_peer_array(u8 *str, struct sockaddr_in *peer);
-void show_ip_list(u8 *str, in_addr_t *ip);
-struct sockaddr_in *create_peer_array(u8 *list, u16 default_port);
-in_addr_t *create_ip_array(u8 *list);
+void show_peer_array(char *str, struct sockaddr_in *peer);
+void show_ip_list(char *str, in_addr_t *ip);
+struct sockaddr_in *create_peer_array(char *list, u16 default_port);
+in_addr_t *create_ip_array(char *list);
 in_addr_t *get_ifaces(void);
 in_addr_t get_sock_ip_port(int sd, u16 *port);
 in_addr_t get_peer_ip_port(int sd, u16 *port);
@@ -318,7 +318,7 @@ void std_err(void);
 
 
 int check_next_arg(int i, int argc, char **argv, int is_num) {
-    u8      *p,
+    char      *p,
             c;
 
     i++;
@@ -362,7 +362,7 @@ int main(int argc, char *argv[]) {
     u16         dport,
                 lport,
                 rport       = 0;
-    u8          *p;
+    char          *p;
 
 #ifdef _WIN32
     WSADATA    wsadata;
@@ -552,7 +552,7 @@ int main(int argc, char *argv[]) {
             }
             if(array_connect(sdl, rhost, NULL, &rpeer, 0) < 0) std_err();
 
-            thread_args = malloc(sizeof(thread_args_t));
+            thread_args = (thread_args_t *) malloc(sizeof(thread_args_t));
             if(!thread_args) std_err();
             thread_args->sock = sdl;
             memcpy(&thread_args->lpeer, &lpeer, sizeof(struct sockaddr_in));
@@ -639,7 +639,7 @@ int main(int argc, char *argv[]) {
     for(;;) {
         ACPT_CHK(sdla, sdl, lpeer);
 
-        thread_args = malloc(sizeof(thread_args_t));
+        thread_args = (thread_args_t *) malloc(sizeof(thread_args_t));
         if(!thread_args) std_err();
         thread_args->sock = sdla;
         memcpy(&thread_args->lpeer, &lpeer, sizeof(struct sockaddr_in));
@@ -708,10 +708,10 @@ int check_ip(struct sockaddr_in *peer) {
 
 
 
-void subst(u8 *data, int len) {
+void subst(char *data, int len) {
     int         slen1,
                 slen2;
-    u8          *limit,
+    char          *limit,
                 *p;
 
     slen1 = strlen(subst1);
@@ -725,14 +725,14 @@ void subst(u8 *data, int len) {
 
 
 
-int mysend(SSL *ssl_sd, int sd, u8 *data, int datasz) {
+int mysend(SSL *ssl_sd, int sd, char *data, int datasz) {
     if(ssl_sd) return(SSL_write(ssl_sd, data, datasz));
     return(send(sd, data, datasz, 0));
 }
 
 
 
-int myrecv(SSL *ssl_sd, int sd, u8 *data, int datasz) {
+int myrecv(SSL *ssl_sd, int sd, char *data, int datasz) {
     if(ssl_sd) return(SSL_read(ssl_sd, data, datasz));
     return(recv(sd, data, datasz, 0));
 }
@@ -781,13 +781,13 @@ void handle_connections(int sock, int sd_one, int *sd_array, struct sockaddr_in 
                 socks       = 0;
     u16         sport,
                 dport;
-    u8          dumpfile[64],
+    char          dumpfile[64],
                 *buff       = NULL,
                 *add,
                 *multi_skip = NULL;
 
     if(sd_one > 0) {
-        sd = malloc(sizeof(int));
+        sd = (int *) malloc(sizeof(int));
         if(!sd) std_err();
         sd[0] = sd_one;
         socks = 1;
@@ -795,7 +795,7 @@ void handle_connections(int sock, int sd_one, int *sd_array, struct sockaddr_in 
         sd = sd_array;
         for(i = 0; sd[i] > 0; i++);
         socks = i;
-        multi_skip = calloc(socks, 1);  // autoreset to 0
+        multi_skip = (char *) calloc(socks, 1);  // autoreset to 0
     } else {
         goto quit;
     }
@@ -904,7 +904,7 @@ void handle_connections(int sock, int sd_one, int *sd_array, struct sockaddr_in 
         acp_dump_handshake(dump_fd, SOCK_STREAM, IPPROTO_TCP, sip, htons(sport), dip, htons(dport), NULL, 0, &seq1, &ack1, &seq2, &ack2, seed);
     }
 
-    buff = malloc(BUFFSZ);
+    buff = (char *) malloc(BUFFSZ);
     if(!buff) std_err();
 
     for(;;) {
@@ -1034,7 +1034,7 @@ quick_thread(multi_connect, thread_args_t *args) { // EXACTLY as above!
 
     for(i = 0; dhost[i].sin_addr.s_addr; i++);
     socks = i;
-    sd = calloc(socks + 1, sizeof(int));
+    sd = (int *) calloc(socks + 1, sizeof(int));
     if(!sd) std_err();
 
     peer_tmp.sin_addr.s_addr = Lhost;
@@ -1061,7 +1061,7 @@ quick_thread(multi_connect, thread_args_t *args) { // EXACTLY as above!
 
 
 
-void xor_data(u8 *data, int size) {
+void xor_data(char *data, int size) {
     while(size--) *data++ ^= XORBYTE;
 }
 
@@ -1122,7 +1122,7 @@ int array_connect(int sd, in_addr_t *ip, struct sockaddr_in *ipport, struct sock
 
 
 
-void show_peer_array(u8 *str, struct sockaddr_in *peer) {
+void show_peer_array(char *str, struct sockaddr_in *peer) {
     int     i;
 
     fputs(str, stderr);
@@ -1135,7 +1135,7 @@ void show_peer_array(u8 *str, struct sockaddr_in *peer) {
 
 
 
-void show_ip_list(u8 *str, in_addr_t *ip) {
+void show_ip_list(char *str, in_addr_t *ip) {
     int     i;
 
     fputs(str, stderr);
@@ -1148,17 +1148,17 @@ void show_ip_list(u8 *str, in_addr_t *ip) {
 
 
 
-struct sockaddr_in *create_peer_array(u8 *list, u16 default_port) {
+struct sockaddr_in *create_peer_array(char *list, u16 default_port) {
     struct sockaddr_in *ret;
     int     i,
             size = 1;
     u16     port;
-    u8      *p1,
+    char      *p1,
             *p2;
 
     for(p2 = list; (p1 = strchr(p2, ',')); size++, p2 = p1 + 1);
 
-    ret = calloc(size + 1, sizeof(struct sockaddr_in));
+    ret = (sockaddr_in *) calloc(size + 1, sizeof(struct sockaddr_in));
     if(!ret) std_err();
 
     for(i = 0;;) {
@@ -1186,16 +1186,16 @@ struct sockaddr_in *create_peer_array(u8 *list, u16 default_port) {
 
 
 
-in_addr_t *create_ip_array(u8 *list) {
+in_addr_t *create_ip_array(char *list) {
     in_addr_t   *ip;
     int         i,
                 size = 1;
-    u8          *p1,
+    char          *p1,
                 *p2;
 
     for(p2 = list; (p1 = strchr(p2, ',')); size++, p2 = p1 + 1);
 
-    ip = malloc((size + 1) * sizeof(in_addr_t));
+    ip = (uint32_t *) malloc((size + 1) * sizeof(in_addr_t));
     if(!ip) std_err();
 
     for(i = 0;;) {
@@ -1238,19 +1238,19 @@ in_addr_t *get_ifaces(void) {
                 num;
     in_addr_t   *ifaces,
                 lo;
-    u8          buff[sizeof(INTERFACE_INFO) * 16];
+    char          buff[sizeof(INTERFACE_INFO) * 16];
 
     sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     if(sd < 0) std_err();
     setsockopt(sd, SOL_SOCKET, SO_LINGER, (char *)&lingerie, sizeof(lingerie));
 
 #ifdef _WIN32
-    if(WSAIoctl(sd, SIO_GET_INTERFACE_LIST, 0, 0, buff, sizeof(buff), (void *)&num, 0, 0) < 0) {
+    if(WSAIoctl(sd, SIO_GET_INTERFACE_LIST, 0, 0, buff, sizeof(buff), (LPDWORD)&num, 0, 0) < 0) {
         // std_err();
         fprintf(stderr, "- error during the calling of WSAIoctl\n");
         num = 0;
     }
-    ifr = (void *)buff;
+    ifr = (INTERFACE_INFO *)buff;
 #else
     ifc.ifc_len = sizeof(buff);
     ifc.ifc_buf = buff;
@@ -1263,7 +1263,7 @@ in_addr_t *get_ifaces(void) {
     num /= sizeof(INTERFACE_INFO);
     close(sd);
 
-    ifaces = malloc(sizeof(in_addr_t) * (num + 2)); // num + lo + NULL
+    ifaces = (uint32_t *) malloc(sizeof(in_addr_t) * (num + 2)); // num + lo + NULL
     if(!ifaces) std_err();
 
     lo = inet_addr("127.0.0.1");

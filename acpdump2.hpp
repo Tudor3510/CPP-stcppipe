@@ -25,7 +25,7 @@
 #ifndef _WIN32
 #include <sys/time.h>
 #endif
-#include "ip2.h"
+#include "ip2.hpp"
 
 #ifdef ACPDUMP_LOCK
     #ifdef _WIN32
@@ -71,7 +71,7 @@
 
 struct in_addr {
     union {
-        struct { uint8_t s_b1,s_b2,s_b3,s_b4; } S_un_b;
+        struct { char s_b1,s_b2,s_b3,s_b4; } S_un_b;
         struct { uint16_t s_w1,s_w2; } S_un_w;
         uint32_t S_addr;
     } S_un;
@@ -104,7 +104,7 @@ struct timevalx {
 
 
 
-uint32_t str2ip(uint8_t *data) {
+uint32_t str2ip(char *data) {
     unsigned    a, b, c, d;
 
     if(!data[0]) return(0);
@@ -114,8 +114,8 @@ uint32_t str2ip(uint8_t *data) {
 
 
 
-uint8_t *ip2str(uint32_t ip) {
-    static uint8_t  data[16];
+char *ip2str(uint32_t ip) {
+    static char  data[16];
 
     sprintf((char *)data, "%u.%u.%u.%u",
         (ip & 0xff), ((ip >> 8) & 0xff), ((ip >> 16) & 0xff), ((ip >> 24) & 0xff));
@@ -192,7 +192,7 @@ int create_acp(FILE *fd) {
 
 
 
-int acp_dump(FILE *fd, int type, int protocol, uint32_t src_ip, uint16_t src_port, uint32_t dst_ip, uint16_t dst_port, uint8_t *data, int len, uint32_t *seq1, uint32_t *ack1, uint32_t *seq2, uint32_t *ack2, uint32_t seed) {
+int acp_dump(FILE *fd, int type, int protocol, uint32_t src_ip, uint16_t src_port, uint32_t dst_ip, uint16_t dst_port, char *data, int len, uint32_t *seq1, uint32_t *ack1, uint32_t *seq2, uint32_t *ack2, uint32_t seed) {
     static uint32_t lame_tmp[4] = {0,0,0,0};
     ACPDUMP_LOCK_VAR
     struct {
@@ -200,7 +200,7 @@ int acp_dump(FILE *fd, int type, int protocol, uint32_t src_ip, uint16_t src_por
         uint32_t        caplen;
         uint32_t        len;
     } acp_pck;
-    static const uint8_t ethdata[14] =
+    static const char ethdata[15] =
                     "\x00\x00\x00\x00\x00\x00"  /* dest   */
                     "\x00\x00\x00\x00\x00\x00"  /* source */
                     "\x08\x00";                 /* type   */
@@ -214,7 +214,7 @@ int acp_dump(FILE *fd, int type, int protocol, uint32_t src_ip, uint16_t src_por
     int     size,
             tpsize,
             close_tcp;
-    uint8_t *tp;
+    char *tp;
 
     if(!fd) return -1;
     if(!seq1) seq1 = &lame_tmp[0];
@@ -239,16 +239,16 @@ int acp_dump(FILE *fd, int type, int protocol, uint32_t src_ip, uint16_t src_por
     if(type == 3) {
         // SOCK_RAW
     } else if(protocol == 6) {
-        tp     = (uint8_t *)&tcp;
+        tp     = (char *)&tcp;
         tpsize = sizeof(tcph);
     } else if(protocol == 17) {
-        tp     = (uint8_t *)&udp;
+        tp     = (char *)&udp;
         tpsize = sizeof(udph);
     } else if(protocol == 1) {
-        tp     = (uint8_t *)&icmp;
+        tp     = (char *)&icmp;
         tpsize = sizeof(icmph);
     } else if(protocol == 2) {
-        tp     = (uint8_t *)&igmp;
+        tp     = (char *)&igmp;
         tpsize = sizeof(igmph);
     }
 
@@ -307,7 +307,7 @@ int acp_dump(FILE *fd, int type, int protocol, uint32_t src_ip, uint16_t src_por
     ip.check         = net16(0);
     ip.saddr         = src_ip;
     ip.daddr         = dst_ip;
-    ip.check         = net16(in_cksum((uint8_t *)&ip, sizeof(iph), NULL));
+    ip.check         = net16(in_cksum((char *)&ip, sizeof(iph), NULL));
 
     if(!tp) {
         // SOCK_RAW
@@ -382,7 +382,7 @@ int acp_dump(FILE *fd, int type, int protocol, uint32_t src_ip, uint16_t src_por
 
 
 
-int acp_dump_handshake(FILE *fd, int type, int protocol, uint32_t src_ip, uint16_t src_port, uint32_t dst_ip, uint16_t dst_port, uint8_t *data, int len, uint32_t *seq1, uint32_t *ack1, uint32_t *seq2, uint32_t *ack2, uint32_t seed) {
+int acp_dump_handshake(FILE *fd, int type, int protocol, uint32_t src_ip, uint16_t src_port, uint32_t dst_ip, uint16_t dst_port, char *data, int len, uint32_t *seq1, uint32_t *ack1, uint32_t *seq2, uint32_t *ack2, uint32_t seed) {
     if(!fd) return -1;
     if(!seq1 || !ack1 || !seq2 || !ack2) return -1;
 
